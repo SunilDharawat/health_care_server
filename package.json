@@ -1,0 +1,23 @@
+{
+    "name": "aurora-server",
+    "version": "1.0.0",
+    "description": "Aurora Health Companion - Node.js Server",
+    "main": "src/index.js",
+    "scripts": {
+        "start": "node src/index.js",
+        "dev": "nodemon src/index.js"
+    },
+    "dependencies": {
+        "@anthropic-ai/sdk": "^0.30.0",
+        "@supabase/supabase-js": "^2.45.0",
+        "axios": "^1.7.0",
+        "cors": "^2.8.5",
+        "dotenv": "^16.4.0",
+        "express": "^4.21.0",
+        "form-data": "^4.0.0",
+        "multer": "^1.4.5-lts.1"
+    },
+    "devDependencies": {
+        "nodemon": "^3.1.0"
+    }
+}
