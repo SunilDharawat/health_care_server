@@ -1,4 +1,13 @@
-require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
+const dotenv = require('dotenv');
+
+// Load .env.local if it exists, otherwise fall back to default .env
+const envPath = fs.existsSync(path.resolve(__dirname, '../.env.local'))
+  ? path.resolve(__dirname, '../.env.local')
+  : path.resolve(__dirname, '../.env');
+dotenv.config({ path: envPath });
+
 const express = require('express');
 const cors = require('cors');
 const voiceRouter = require('./routes/voice');
