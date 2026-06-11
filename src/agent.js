@@ -1,5 +1,5 @@
 const Anthropic = require('@anthropic-ai/sdk');
-const supabase = require('../supabase');
+const supabase = require('./supabase');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 

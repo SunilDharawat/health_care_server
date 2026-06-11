@@ -1,4 +1,4 @@
-const supabase = require('../supabase');
+const supabase = require('./supabase');
 
 /**
  * Builds a full health context string for a user.
