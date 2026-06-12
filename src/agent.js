@@ -1,10 +1,8 @@
-const Anthropic = require('@anthropic-ai/sdk');
+const axios = require('axios');
 const supabase = require('./supabase');
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
 // ============================================================
-// TOOL DEFINITIONS — what Claude can do
+// TOOL DEFINITIONS — what Gemini can do
 // ============================================================
 const TOOLS = [
     {
@@ -105,8 +103,31 @@ const TOOLS = [
     },
 ];
 
+// Map our tools schemas to Gemini functionDeclarations format
+const GEMINI_TOOLS = [
+    {
+        functionDeclarations: TOOLS.map(t => ({
+            name: t.name,
+            description: t.description,
+            parameters: {
+                type: 'OBJECT', // Gemini REST API expects uppercase for schema types
+                properties: Object.keys(t.input_schema.properties).reduce((acc, key) => {
+                    const prop = t.input_schema.properties[key];
+                    acc[key] = {
+                        type: prop.type.toUpperCase(),
+                        description: prop.description,
+                        ...(prop.enum ? { enum: prop.enum } : {})
+                    };
+                    return acc;
+                }, {}),
+                required: t.input_schema.required
+            }
+        }))
+    }
+];
+
 // ============================================================
-// TOOL EXECUTORS — what actually happens when Claude calls a tool
+// TOOL EXECUTORS — what actually happens when the agent calls a tool
 // ============================================================
 async function executeTool(toolName, toolInput, userId) {
     const today = new Date().toISOString().split('T')[0];
@@ -210,55 +231,76 @@ Important rules:
 - If they ask how they're doing, give a specific, data-driven answer
 - Estimate nutritional values using your knowledge when logging meals`;
 
-    const messages = [{ role: 'user', content: userMessage }];
+    const systemInstruction = {
+        parts: [{ text: systemPrompt }]
+    };
+
+    let contents = [
+        {
+            role: 'user',
+            parts: [{ text: userMessage }]
+        }
+    ];
+
     let finalReply = '';
     let actionTaken = null;
-
-    // Agentic loop — Claude may call tools, we execute them, then Claude responds
-    let loopMessages = [...messages];
     let iterations = 0;
+    const apiKey = process.env.GEMINI_API_KEY;
+
+    if (!apiKey) {
+        throw new Error('GEMINI_API_KEY is not defined in the environment variables');
+    }
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
     while (iterations < 5) {
         iterations++;
 
-        const response = await anthropic.messages.create({
-            model: 'claude-3-5-sonnet-latest',
-            max_tokens: 1024,
-            system: systemPrompt,
-            tools: TOOLS,
-            messages: loopMessages,
+        const response = await axios.post(url, {
+            contents,
+            systemInstruction,
+            tools: GEMINI_TOOLS
         });
 
-        // Collect text
-        const textBlocks = response.content.filter(b => b.type === 'text');
-        if (textBlocks.length > 0) {
-            finalReply = textBlocks.map(b => b.text).join(' ');
+        const candidate = response.data?.candidates?.[0];
+        const content = candidate?.content;
+        const parts = content?.parts || [];
+
+        // Check for text content
+        const textParts = parts.filter(p => p.text);
+        if (textParts.length > 0) {
+            finalReply = textParts.map(p => p.text).join(' ');
         }
 
-        // If no tool use, we're done
-        if (response.stop_reason === 'end_turn') break;
+        // Check for function calls
+        const functionCalls = parts.filter(p => p.functionCall);
+        if (functionCalls.length === 0) {
+            break;
+        }
 
-        // Process tool calls
-        const toolUseBlocks = response.content.filter(b => b.type === 'tool_use');
-        if (toolUseBlocks.length === 0) break;
-
-        // Add assistant message to loop
-        loopMessages.push({ role: 'assistant', content: response.content });
+        // Add assistant's response to conversation history
+        contents.push(content);
 
         // Execute all tool calls and collect results
-        const toolResults = [];
-        for (const toolUse of toolUseBlocks) {
-            const result = await executeTool(toolUse.name, toolUse.input, userId);
+        const toolResultParts = [];
+        for (const part of functionCalls) {
+            const func = part.functionCall;
+            const result = await executeTool(func.name, func.args, userId);
             if (result.action) actionTaken = result.action;
-            toolResults.push({
-                type: 'tool_result',
-                tool_use_id: toolUse.id,
-                content: JSON.stringify(result),
+            
+            toolResultParts.push({
+                functionResponse: {
+                    name: func.name,
+                    response: result
+                }
             });
         }
 
-        // Add tool results to loop
-        loopMessages.push({ role: 'user', content: toolResults });
+        // Add tool execution results to history
+        contents.push({
+            role: 'function',
+            parts: toolResultParts
+        });
     }
 
     return {
