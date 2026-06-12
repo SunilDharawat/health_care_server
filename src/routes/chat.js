@@ -27,6 +27,9 @@ router.post('/', async (req, res) => {
         console.error('[chat] Error:', err);
         return res.status(500).json({
             error: 'Chat failed',
+            message: err.message,
+            stack: err.stack,
+            details: err.response?.data || null,
             reply: 'Sorry, something went wrong. Please try again.',
             action: null,
             audioBase64: null,
