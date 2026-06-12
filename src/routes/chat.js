@@ -37,4 +37,18 @@ router.post('/', async (req, res) => {
     }
 });
 
+router.get('/test', async (req, res) => {
+    try {
+        const axios = require('axios');
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            return res.json({ error: 'GEMINI_API_KEY is not defined' });
+        }
+        const response = await axios.get(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+        return res.json({ models: response.data.models });
+    } catch (err) {
+        return res.status(500).json({ error: err.message, response: err.response?.data });
+    }
+});
+
 module.exports = router;
