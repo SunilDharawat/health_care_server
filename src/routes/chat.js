@@ -1,13 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const { runAgent } = require('../agent');
+const { runAgent } = require('../agent');  // Now uses Groq
 const { textToSpeech } = require('../tts');
 const { buildHealthContext } = require('../healthContext');
 
 /**
  * POST /api/chat
- * Body: { message: string, userId: string }
- * Returns: { reply, action, audioBase64 }
+ * Text-only agent (for suggested prompts)
  */
 router.post('/', async (req, res) => {
     try {
@@ -17,16 +16,25 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'Missing message or userId' });
         }
 
+        console.log(`[chat] Message from ${userId}: "${message}"`);
+
         const healthContext = await buildHealthContext(userId);
         const { reply, action } = await runAgent(message, userId, healthContext);
-        const audioBase64 = await textToSpeech(reply);
+
+        const audioBase64 = await textToSpeech(reply).catch(err => {
+            console.warn('TTS unavailable:', err.message);
+            return null;
+        });
+
+        console.log(`[chat] Reply: "${reply}" | Action: ${action}`);
 
         return res.json({ reply, action, audioBase64 });
 
     } catch (err) {
-        console.error('[chat] Error:', err);
+        console.error('[chat] Error:', err.message);
         return res.status(500).json({
             error: 'Chat failed',
+            details: err.message,
             reply: 'Sorry, something went wrong. Please try again.',
             action: null,
             audioBase64: null,
@@ -34,18 +42,14 @@ router.post('/', async (req, res) => {
     }
 });
 
+/**
+ * Test endpoint
+ */
 router.get('/test', async (req, res) => {
-    try {
-        const axios = require('axios');
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) {
-            return res.json({ error: 'GEMINI_API_KEY is not defined' });
-        }
-        const response = await axios.get(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-        return res.json({ models: response.data.models });
-    } catch (err) {
-        return res.status(500).json({ error: err.message, response: err.response?.data });
-    }
+    return res.json({
+        status: 'Chat service ready',
+        groq_configured: !!process.env.GROQ_API_KEY,
+    });
 });
 
 module.exports = router;
