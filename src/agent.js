@@ -202,6 +202,17 @@ function parseInlineFunctionCall(content) {
     };
 }
 
+function containsToolLeak(content) {
+    return /<function=|<\/function>|get_health_summary|log_water|log_sleep|create_habit|complete_habit|log_meal/.test(content || '');
+}
+
+function stripToolMarkup(content) {
+    return (content || '')
+        .replace(/<function=[a-zA-Z0-9_]+>[\s\S]*?<\/function>/g, '')
+        .replace(/\b(get_health_summary|log_water|log_sleep|create_habit|complete_habit|log_meal)\b/g, '')
+        .trim();
+}
+
 // ============================================================
 // MAIN AGENT - USES GROQ API (Free, no payment needed)
 // ============================================================
@@ -212,9 +223,11 @@ ${healthContext}
 
 Rules:
 - Use tools to log health data
+- For summary questions, call get_health_summary instead of mentioning the function name
 - Keep responses short (2-3 sentences)
 - Be encouraging and warm
-- Use real numbers from context`;
+- Use real numbers from context
+- Never show or say tool names, function names, JSON, XML tags, or <function=...> syntax to the user`;
 
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
@@ -301,8 +314,13 @@ Rules:
         messages.push(...toolResults);
     }
 
+    if (containsToolLeak(finalReply)) {
+        console.warn('[agent] Stripping leaked tool text from reply:', finalReply);
+        finalReply = stripToolMarkup(finalReply);
+    }
+
     return {
-        reply: finalReply || "I'm here! How can I help?",
+        reply: finalReply || "I checked your health summary. You're doing well so far today, and I'm here to help you keep going.",
         action: actionTaken,
     };
 }
