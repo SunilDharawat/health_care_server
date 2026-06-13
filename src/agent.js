@@ -6,73 +6,91 @@ const supabase = require('./supabase');
 // ============================================================
 const TOOLS = [
     {
-        name: 'log_water',
-        description: 'Log water intake for the user.',
-        input_schema: {
-            type: 'object',
-            properties: {
-                amount_ml: { type: 'number', description: 'Amount in ml' },
+        type: 'function',
+        function: {
+            name: 'log_water',
+            description: 'Log water intake for the user.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    amount_ml: { type: 'number', description: 'Amount in ml' },
+                },
+                required: ['amount_ml'],
             },
-            required: ['amount_ml'],
         },
     },
     {
-        name: 'log_sleep',
-        description: 'Log sleep duration.',
-        input_schema: {
-            type: 'object',
-            properties: {
-                hours: { type: 'number', description: 'Hours slept' },
-                quality: { type: 'number', description: 'Quality 1-5' },
+        type: 'function',
+        function: {
+            name: 'log_sleep',
+            description: 'Log sleep duration.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    hours: { type: 'number', description: 'Hours slept' },
+                    quality: { type: 'number', description: 'Quality 1-5' },
+                },
+                required: ['hours'],
             },
-            required: ['hours'],
         },
     },
     {
-        name: 'create_habit',
-        description: 'Create a new habit.',
-        input_schema: {
-            type: 'object',
-            properties: {
-                name: { type: 'string', description: 'Habit name' },
-                icon: { type: 'string', description: 'Icon key' },
+        type: 'function',
+        function: {
+            name: 'create_habit',
+            description: 'Create a new habit.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    name: { type: 'string', description: 'Habit name' },
+                    icon: { type: 'string', description: 'Icon key' },
+                },
+                required: ['name'],
             },
-            required: ['name'],
         },
     },
     {
-        name: 'complete_habit',
-        description: 'Mark habit as completed.',
-        input_schema: {
-            type: 'object',
-            properties: {
-                habit_name: { type: 'string', description: 'Habit name' },
+        type: 'function',
+        function: {
+            name: 'complete_habit',
+            description: 'Mark habit as completed.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    habit_name: { type: 'string', description: 'Habit name' },
+                },
+                required: ['habit_name'],
             },
-            required: ['habit_name'],
         },
     },
     {
-        name: 'log_meal',
-        description: 'Log a meal.',
-        input_schema: {
-            type: 'object',
-            properties: {
-                name: { type: 'string', description: 'Food name' },
-                meal_type: { type: 'string', enum: ['breakfast', 'lunch', 'dinner', 'snack'] },
-                calories: { type: 'number', description: 'Calories' },
+        type: 'function',
+        function: {
+            name: 'log_meal',
+            description: 'Log a meal.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    name: { type: 'string', description: 'Food name' },
+                    meal_type: { type: 'string', enum: ['breakfast', 'lunch', 'dinner', 'snack'] },
+                    calories: { type: 'number', description: 'Calories' },
+                },
+                required: ['name', 'meal_type'],
             },
-            required: ['name', 'meal_type'],
         },
     },
     {
-        name: 'get_health_summary',
-        description: 'Get health summary.',
-        input_schema: {
-            type: 'object',
-            properties: {
-                period: { type: 'string', enum: ['today', 'week'] },
+        type: 'function',
+        function: {
+            name: 'get_health_summary',
+            description: 'Get health summary.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    period: { type: 'string', enum: ['today', 'week'] },
+                },
+                required: ['period'],
             },
-            required: ['period'],
         },
     },
 ];
@@ -187,7 +205,7 @@ Rules:
         iterations++;
 
         const response = await axios.post(url, {
-            model: 'mixtral-8x7b-32768', // Free model, very fast
+            model: 'llama-3.1-8b-instant', // Free model, very fast
             messages,
             tools: TOOLS,
             tool_choice: 'auto',
@@ -198,6 +216,13 @@ Rules:
                 'Authorization': `Bearer ${apiKey}`,
                 'Content-Type': 'application/json',
             },
+        }).catch(err => {
+            if (err.response) {
+                console.error('[agent] Groq error:', err.response.status, JSON.stringify(err.response.data));
+                throw new Error(`Groq error ${err.response.status}: ${JSON.stringify(err.response.data)}`);
+            }
+
+            throw err;
         });
 
         const choice = response.data.choices[0];
