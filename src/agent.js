@@ -98,7 +98,7 @@ const TOOLS = [
 // ============================================================
 // TOOL EXECUTORS
 // ============================================================
-async function executeTool(toolName, toolInput, userId) {
+async function executeTool(toolName, toolInput, userId, healthContext) {
     const today = new Date().toISOString().split('T')[0];
 
     switch (toolName) {
@@ -166,9 +166,40 @@ async function executeTool(toolName, toolInput, userId) {
             return { success: true, message: `Logged ${name}`, action: `Logged ${name}` };
         }
 
+        case 'get_health_summary': {
+            return {
+                success: true,
+                message: healthContext || 'Health summary is unavailable right now.',
+            };
+        }
+
         default:
             return { success: false, message: `Unknown tool` };
     }
+}
+
+function parseInlineFunctionCall(content) {
+    if (!content) return null;
+
+    const match = content.match(/<function=([a-zA-Z0-9_]+)>([\s\S]*?)<\/function>/);
+    if (!match) return null;
+
+    const [, name, rawArgs] = match;
+
+    try {
+        JSON.parse(rawArgs);
+    } catch {
+        return null;
+    }
+
+    return {
+        id: `inline_${Date.now()}`,
+        type: 'function',
+        function: {
+            name,
+            arguments: rawArgs,
+        },
+    };
 }
 
 // ============================================================
@@ -226,12 +257,21 @@ Rules:
         });
 
         const choice = response.data.choices[0];
-        const toolCalls = choice.message.tool_calls || [];
+        const inlineToolCall = parseInlineFunctionCall(choice.message.content);
+        const toolCalls = choice.message.tool_calls?.length
+            ? choice.message.tool_calls
+            : inlineToolCall
+                ? [inlineToolCall]
+                : [];
 
         // Add assistant message
-        messages.push({ role: 'assistant', content: choice.message.content || '', tool_calls: toolCalls });
+        messages.push({
+            role: 'assistant',
+            content: toolCalls.length ? null : choice.message.content || '',
+            tool_calls: toolCalls,
+        });
 
-        if (choice.message.content) {
+        if (choice.message.content && !inlineToolCall) {
             finalReply = choice.message.content;
         }
 
@@ -243,7 +283,12 @@ Rules:
         // Execute tools
         const toolResults = [];
         for (const toolCall of toolCalls) {
-            const result = await executeTool(toolCall.function.name, JSON.parse(toolCall.function.arguments), userId);
+            const result = await executeTool(
+                toolCall.function.name,
+                JSON.parse(toolCall.function.arguments),
+                userId,
+                healthContext,
+            );
             if (result.action) actionTaken = result.action;
 
             toolResults.push({
