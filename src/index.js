@@ -12,6 +12,7 @@ const express = require('express');
 const cors = require('cors');
 const voiceRouter = require('./routes/voice');
 const chatRouter = require('./routes/chat');
+const insightsRouter = require('./routes/insights');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -26,6 +27,7 @@ app.get('/health', (req, res) => res.json({ status: 'ok', service: 'aurora-backe
 // Routes
 app.use('/api/voice', voiceRouter);
 app.use('/api/chat', chatRouter);
+app.use('/api/insights', insightsRouter);
 
 app.listen(PORT, () => {
     console.log(`Aurora backend running on http://localhost:${PORT}`);
